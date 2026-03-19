@@ -6,6 +6,7 @@ from __future__ import annotations
 import base64
 import inspect
 import io
+import json
 from typing import Any, Callable
 
 import dash
@@ -57,6 +58,32 @@ def make_snapshot(browser_img: str):
     return plt.imread(io.BytesIO(base64.b64decode(b64)))
 
 
+def snapshot_figure(browser_img: str, dpi: int = 300):
+    """Create a matplotlib figure sized to match a browser-captured snapshot.
+
+    Ensures 1:1 pixel mapping between the captured PNG and the output figure,
+    with the given DPI applied to all matplotlib elements (text, axes, etc.).
+
+    Parameters
+    ----------
+    browser_img :
+        Base64 PNG data URL from ``Plotly.toImage()`` in the browser.
+    dpi :
+        Output DPI. Defaults to ``300``.
+
+    Returns
+    -------
+    tuple[matplotlib.figure.Figure, matplotlib.axes.Axes]
+        ``(fig, ax)`` with ``ax.imshow`` already called and ``ax.axis("off")``.
+    """
+    img = make_snapshot(browser_img)
+    h, w = img.shape[:2]
+    fig, ax = plt.subplots(figsize=(w / dpi, h / dpi), dpi=dpi)
+    ax.imshow(img)
+    ax.axis("off")
+    return fig, ax
+
+
 def snapshot_renderer(_fig_data: dict, title: str = "", _img_b64: str = ""):
     """Render a Plotly figure as a matplotlib snapshot.
 
@@ -76,10 +103,7 @@ def snapshot_renderer(_fig_data: dict, title: str = "", _img_b64: str = ""):
     -------
     matplotlib.figure.Figure
     """
-    img = make_snapshot(_img_b64)
-    fig, ax = plt.subplots()
-    ax.imshow(img)
-    ax.axis("off")
+    fig, ax = snapshot_figure(_img_b64)
     if title:
         ax.set_title(title)
     return fig
@@ -90,6 +114,9 @@ def mpl_export_button(
     renderer: Callable = snapshot_renderer,
     label: str = "Export",
     strip_title: bool = False,
+    scale: int = 3,
+    width: int | None = None,
+    height: int | None = None,
 ) -> html.Div:
     """Add a matplotlib export wizard button for a dcc.Graph.
 
@@ -108,6 +135,12 @@ def mpl_export_button(
     strip_title :
         Remove the Plotly figure title before capturing the browser snapshot.
         Use when the renderer adds its own title via matplotlib.
+    scale :
+        Pixel density multiplier for ``Plotly.toImage``. Defaults to ``3``.
+    width :
+        Capture width in pixels. Overrides the displayed graph width.
+    height :
+        Capture height in pixels. Overrides the displayed graph height.
 
     Returns
     -------
@@ -206,6 +239,15 @@ def mpl_export_button(
     if _renderer_accepts_img:
         # Capture the browser-rendered Plotly figure as a base64 PNG.
         # Guard: !n_intervals skips the arm_interval reset-to-0 side-effect.
+        _img_opts = {"format": "png", "scale": scale}
+        if width is not None:
+            _img_opts["width"] = width
+        if height is not None:
+            _img_opts["height"] = height
+        _toimage_opts = json.dumps(_img_opts)
+        _dim_w = str(width) if width else "graphDiv.offsetWidth"
+        _dim_h = str(height) if height else "graphDiv.offsetHeight"
+
         _js_head = f"""
             async function(n_clicks, n_intervals) {{
                 if (!n_clicks && !n_intervals) {{
@@ -219,25 +261,24 @@ def mpl_export_button(
         if strip_title:
             _capture_js = (
                 _js_head
-                + """
-                const layout = JSON.parse(JSON.stringify(graphDiv.layout || {}));
-                layout.title = {text: ''};
-                layout.margin = {...(layout.margin || {}), t: 20};
+                + f"""
+                const layout = JSON.parse(JSON.stringify(graphDiv.layout || {{}}));
+                layout.title = {{text: ''}};
+                layout.margin = {{...(layout.margin || {{}}), t: 20}};
                 const tmp = document.createElement('div');
                 tmp.style.cssText = 'position:fixed;left:-9999px;width:'
-                    + graphDiv.offsetWidth + 'px;height:'
-                    + graphDiv.offsetHeight + 'px';
+                    + {_dim_w} + 'px;height:' + {_dim_h} + 'px';
                 document.body.appendChild(tmp);
                 await Plotly.newPlot(tmp, graphDiv.data, layout);
-                const img = await Plotly.toImage(tmp, {format: 'png'});
+                const img = await Plotly.toImage(tmp, {_toimage_opts});
                 document.body.removeChild(tmp);
                 return img;
-            }"""
+            }}"""
             )
         else:
             _capture_js = (
                 _js_head
-                + "return await Plotly.toImage(graphDiv, {format: 'png'});"
+                + f"return await Plotly.toImage(graphDiv, {_toimage_opts});"
                 + "\n            }"
             )
 

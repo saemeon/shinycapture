@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 from dash import Dash, dcc, html
 
-from s5ndt.mpl_export import FromPlotly, make_snapshot, mpl_export_button
+from s5ndt.mpl_export import FromPlotly, mpl_export_button, snapshot_figure
 
 app = Dash(__name__)
 
@@ -23,10 +23,13 @@ graph = dcc.Graph(
 )
 
 
-# --- renderer 1: full custom renderer, all field types ---
+# --- renderer: full custom (figure data, all wizard field types) ---
+# Demonstrates: figure-data renderer (no browser capture), FromPlotly defaults,
+# all supported wizard field types (str, int, float, bool, date, datetime,
+# Literal, list, tuple).
 
 
-def full_renderer(
+def custom_renderer(
     _fig_data,
     title: str = FromPlotly("layout.title.text", graph),  # type: ignore[assignment]
     xlabel: str = FromPlotly("layout.xaxis.title.text", graph),  # type: ignore[assignment]
@@ -60,7 +63,9 @@ def full_renderer(
     return fig
 
 
-# --- renderer 2: browser snapshot with title overlay ---
+# --- renderer: snapshot with matplotlib title overlay ---
+# Demonstrates: browser-snapshot renderer (_img_b64), strip_title to remove the
+# Plotly title before capture so matplotlib can draw its own, FromPlotly default.
 
 
 def snapshot_with_title(
@@ -69,10 +74,7 @@ def snapshot_with_title(
     title: str = FromPlotly("layout.title.text", graph),  # type: ignore[assignment]
     suptitle: str = "",
 ):
-    img = make_snapshot(_img_b64)
-    fig, ax = plt.subplots()
-    ax.imshow(img)
-    ax.axis("off")
+    fig, ax = snapshot_figure(_img_b64)
     if title:
         ax.set_title(title)
     if suptitle:
@@ -86,21 +88,50 @@ app.layout = html.Div(
     [
         graph,
         html.Div(
-            [
+            style={"display": "flex", "gap": "8px", "flexWrap": "wrap"},
+            children=[
+                # 1. Simplest usage: default snapshot renderer, no configuration.
                 mpl_export_button(
                     graph_id="main-graph",
-                    renderer=full_renderer,
-                    label="Export (custom)",
+                    label="Snapshot (default)",
                 ),
+                # 2. Custom figure-data renderer: rebuilds the chart from raw data,
+                #    no browser capture required.
+                mpl_export_button(
+                    graph_id="main-graph",
+                    renderer=custom_renderer,
+                    label="Custom renderer",
+                ),
+                # 3. Snapshot with matplotlib title overlay: strips the Plotly title
+                #    before capturing so the renderer can place its own.
                 mpl_export_button(
                     graph_id="main-graph",
                     renderer=snapshot_with_title,
-                    label="Export (snapshot+title)",
+                    label="Snapshot + title overlay",
                     strip_title=True,
                 ),
-                mpl_export_button(graph_id="main-graph", label="Export (snapshot)"),
+                # 4. High-resolution capture: scale=5 gives 5× pixel density.
+                mpl_export_button(
+                    graph_id="main-graph",
+                    label="Snapshot high-res (scale=5)",
+                    scale=5,
+                ),
+                # 5. Fixed capture size: overrides the displayed graph dimensions.
+                mpl_export_button(
+                    graph_id="main-graph",
+                    label="Snapshot fixed size (800×400)",
+                    width=800,
+                    height=400,
+                ),
+                # 6. Fixed size + high-res: explicit dimensions combined with scale.
+                mpl_export_button(
+                    graph_id="main-graph",
+                    label="Snapshot fixed + high-res (800×400, scale=3)",
+                    width=800,
+                    height=400,
+                    scale=3,
+                ),
             ],
-            style={"display": "flex", "gap": "8px"},
         ),
     ]
 )
