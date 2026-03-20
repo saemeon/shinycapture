@@ -11,7 +11,7 @@ from typing import Any, Callable, cast
 import dash
 from dash import Input, Output, State, dcc, html
 
-from dash_fn_tools import FromComponent, build_config, field_id
+from dash_fn_tools import FieldHook, FieldSpec, FromComponent, build_config, field_id
 from s5ndt._ids import id_generator
 from s5ndt.dropdown import build_dropdown
 from s5ndt.wizard import build_wizard
@@ -243,7 +243,7 @@ def graph_exporter(
     autogenerate: bool = False,
     styles: dict | None = None,
     class_names: dict | None = None,
-    component_overrides: dict | None = None,
+    field_specs: dict[str, FieldSpec | FieldHook] | None = None,
 ) -> html.Div:
     """Add an export wizard button for a dcc.Graph.
 
@@ -305,18 +305,16 @@ def graph_exporter(
         "button": {"background": "#2563eb"}}``.
     class_names :
         Dict mapping the same slot names to CSS class name strings.
-    component_overrides :
-        Dict mapping renderer parameter names to custom Dash components.
-        The named field uses that component as its widget instead of the
-        auto-generated one. The component's ``id`` is replaced internally.
-        The state property read back is determined by the field's type
-        annotation, so the override component must expose the matching
-        property (e.g. ``int`` → ``"value"``, ``date`` → ``"date"``).
+    field_specs :
+        Per-field customisation for renderer parameters, keyed by name.
+        Values may be a :class:`~dash_fn_tools.FieldSpec` or a bare
+        :class:`~dash_fn_tools.FieldHook`.  Use this to override a
+        component, add a label, set min/max, etc.
 
         Example::
 
-            component_overrides={
-                "dpi": dcc.Slider(min=72, max=600, value=300),
+            field_specs={
+                "dpi": FieldSpec(component=dcc.Slider(min=72, max=600, value=300)),
             }
 
     Returns
@@ -352,7 +350,12 @@ def graph_exporter(
     _class_names = class_names or {}
 
     config = build_config(
-        config_id, renderer, _styles, _class_names, component_overrides
+        config_id,
+        renderer,
+        styles=_styles,
+        class_names=_class_names,
+        field_specs=field_specs,
+        show_docstring=False,
     )
 
     menu = build_dropdown(

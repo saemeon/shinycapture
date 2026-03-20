@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 from dash import Dash, dcc, html
 
-from s5ndt import FromPlotly, graph_exporter
+from s5ndt import FieldSpec, FromPlotly, graph_exporter
 
 plt.switch_backend("agg")
 
@@ -193,21 +193,26 @@ app.layout = html.Div(
                     graph=graph,
                     renderer=snapshot_with_overrides,
                     trigger="Component overrides",
-                    component_overrides={
-                        "dpi": dcc.Slider(
-                            min=72,
-                            max=600,
-                            step=None,
-                            marks={72: "72", 150: "150", 300: "300", 600: "600"},
-                            value=300,
-                            tooltip={"placement": "bottom", "always_visible": True},
+                    field_specs={
+                        "dpi": FieldSpec(
+                            component=dcc.Slider(
+                                min=72,
+                                max=600,
+                                step=None,
+                                marks={72: "72", 150: "150", 300: "300", 600: "600"},
+                                value=300,
+                                tooltip={"placement": "bottom", "always_visible": True},
+                            )
                         ),
-                        "capture_scale": dcc.RadioItems(
-                            options=[
-                                {"label": f" {v}×", "value": v} for v in [1, 2, 3, 4]
-                            ],
-                            value=2,
-                            inline=True,
+                        "capture_scale": FieldSpec(
+                            component=dcc.RadioItems(
+                                options=[
+                                    {"label": f" {v}×", "value": v}
+                                    for v in [1, 2, 3, 4]
+                                ],
+                                value=2,
+                                inline=True,
+                            )
                         ),
                     },
                 ),
