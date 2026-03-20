@@ -1,5 +1,5 @@
-[![PyPI](https://img.shields.io/pypi/v/dash-fn-tools)](https://pypi.org/project/dash-fn-tools/)
-[![Python](https://img.shields.io/pypi/pyversions/dash-fn-tools)](https://pypi.org/project/dash-fn-tools/)
+[![PyPI](https://img.shields.io/pypi/v/dash-fn-interact)](https://pypi.org/project/dash-fn-interact/)
+[![Python](https://img.shields.io/pypi/pyversions/dash-fn-interact)](https://pypi.org/project/dash-fn-interact/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Plotly](https://img.shields.io/badge/Plotly-3F4F75?logo=plotly&logoColor=white)](https://plotly.com/python/)
 [![Dash](https://img.shields.io/badge/Dash-008DE4?logo=plotly&logoColor=white)](https://dash.plotly.com/)
@@ -8,23 +8,23 @@
 [![ty](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ty/main/assets/badge/v0.json)](https://github.com/astral-sh/ty)
 [![prek](https://img.shields.io/badge/prek-checked-blue)](https://github.com/saemeon/prek)
 
-# dash-fn-tools
+# dash-fn-interact
 
 An introspection-based UI generator for Plotly Dash. Automatically transform type-hinted Python functions into reactive Dash forms.
 
-**Documentation: [saemeon.github.io/dash-fn-tools](https://saemeon.github.io/dash-fn-tools/)**
+**Documentation: [saemeon.github.io/dash-fn-interact](https://saemeon.github.io/dash-fn-interact/)**
 
 ## Installation
 
 ```bash
-pip install dash-fn-tools
+pip install dash-fn-interact
 ```
 
 ## Quickstart
 
 ```python
 from dash import Dash, Input, Output, html
-from dash_fn_tools import build_config
+from dash_fn_interact import build_config
 
 app = Dash(__name__)
 
@@ -49,7 +49,7 @@ def on_apply(n, *values):
 
 | Name | Description |
 |------|-------------|
-| `build_config(id, fn, ...)` | Introspect a callable into a `Config` |
+| `build_config(id, fn, field=FieldSpec(...), field=(min,max,step), ...)` | Introspect a callable into a `Config` |
 | `Config.div` | `html.Div` with labeled input fields — embed anywhere |
 | `Config.states` | `list[State]` to pass to a Dash callback |
 | `Config.build_kwargs(values)` | Reconstruct typed `**kwargs` from callback values |
@@ -61,6 +61,12 @@ def on_apply(n, *values):
 | `field_id(config_id, name)` | Compute the Dash component ID for a field |
 
 **Supported types:** `str`, `int`, `float`, `bool`, `date`, `datetime`, `Literal[...]`, `list[T]`, `tuple[T, ...]`, `T | None`
+
+## Credits
+
+| Feature | Inspiration |
+|---------|-------------|
+| `visible` rules (conditional field visibility) | [dash-pydantic-form](https://github.com/RenaudLN/dash-pydantic-form) — the idea of encoding visibility conditions in a component's `id` dict and handling all visibility toggling in a single clientside callback via pattern matching (`ALL`/`MATCH`) comes directly from their implementation. |
 
 ## License
 

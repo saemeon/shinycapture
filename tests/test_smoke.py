@@ -1,5 +1,5 @@
-import dash_fn_tools
+import dash_fn_interact
 
 
 def test_import():
-    assert dash_fn_tools
+    assert dash_fn_interact

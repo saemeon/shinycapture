@@ -26,7 +26,7 @@ from typing import (
 import dash
 from dash import Input, Output, State, dcc, html
 
-from dash_fn_tools._spec import FieldHook, FieldSpec
+from dash_fn_interact._spec import FieldHook, FieldSpec
 
 _registered_config_ids: set[str] = set()
 
@@ -403,32 +403,24 @@ class Config:
                     if cur_date not in (None, "") or cur_time not in (None, ""):
                         results += [dash.no_update, dash.no_update]
                         continue
-                    val = hook.get_default(*resolved)
-                    if isinstance(val, datetime):
-                        results += [val.date().isoformat(), val.strftime("%H:%M")]
-                    else:
+                    widget_val = _to_widget_value(f, hook.get_default(*resolved))
+                    if widget_val == (None, None):
                         results += [dash.no_update, dash.no_update]
+                    else:
+                        results += list(widget_val)
                 elif f.type == "date":
                     if next(cur) not in (None, ""):
                         results.append(dash.no_update)
                         continue
-                    val = hook.get_default(*resolved)
+                    widget_val = _to_widget_value(f, hook.get_default(*resolved))
                     results.append(
-                        val.isoformat() if isinstance(val, date) else dash.no_update
+                        widget_val if widget_val is not None else dash.no_update
                     )
                 else:
                     if next(cur) not in (None, ""):
                         results.append(dash.no_update)
                         continue
-                    val = hook.get_default(*resolved)
-                    if isinstance(val, Enum):
-                        results.append(val.name)
-                    elif isinstance(val, dict):
-                        results.append(json.dumps(val, indent=2))
-                    elif isinstance(val, pathlib.Path):
-                        results.append(str(val))
-                    else:
-                        results.append(val)
+                    results.append(_to_widget_value(f, hook.get_default(*resolved)))
             return results
 
     def register_restore_callback(self, restore_input: Input) -> None:
@@ -485,28 +477,11 @@ class Config:
                     val = hook.get_default(*resolved)
                 else:
                     val = f.default
-
+                widget_val = _to_widget_value(f, val)
                 if f.type == "datetime":
-                    if isinstance(val, datetime):
-                        results.append(val.date().isoformat())
-                        results.append(val.strftime("%H:%M"))
-                    else:
-                        results.append(None)
-                        results.append(None)
-                elif f.type == "date":
-                    results.append(val.isoformat() if isinstance(val, date) else None)
-                elif f.type == "bool":
-                    results.append([f.name] if val else [])
-                elif f.type in ("list", "tuple"):
-                    results.append(", ".join(str(v) for v in val) if val else "")
-                elif f.type == "enum":
-                    results.append(val.name if isinstance(val, Enum) else val)
-                elif f.type == "dict":
-                    results.append(json.dumps(val, indent=2) if val is not None else "")
-                elif f.type == "path":
-                    results.append(str(val) if val is not None else "")
+                    results.extend(widget_val)
                 else:
-                    results.append(val if val is not None else "")
+                    results.append(widget_val)
             return results
 
 
@@ -595,7 +570,7 @@ def build_config(
     """
     if config_id in _registered_config_ids:
         warnings.warn(
-            f"dash-fn-tools: config_id {config_id!r} is already in use. "
+            f"dash-fn-interact: config_id {config_id!r} is already in use. "
             "Duplicate IDs will cause Dash callback errors.",
             UserWarning,
             stacklevel=2,
@@ -869,6 +844,31 @@ _RESERVED = frozenset(
         "_include",
     }
 )
+
+
+def _to_widget_value(f: _Field, val: Any) -> Any:
+    """Convert a typed Python value to its widget representation.
+
+    For ``datetime`` fields returns a ``(date_str, time_str)`` tuple.
+    For all other types returns a single scalar value.
+    """
+    if f.type == "datetime":
+        if isinstance(val, datetime):
+            return val.date().isoformat(), val.strftime("%H:%M")
+        return None, None
+    if f.type == "date":
+        return val.isoformat() if isinstance(val, date) else None
+    if f.type == "bool":
+        return [f.name] if val else []
+    if f.type in ("list", "tuple"):
+        return ", ".join(str(v) for v in val) if val else ""
+    if f.type == "enum":
+        return val.name if isinstance(val, Enum) else (val or "")
+    if f.type == "dict":
+        return json.dumps(val, indent=2) if val is not None else ""
+    if f.type == "path":
+        return str(val) if val is not None else ""
+    return val if val is not None else ""
 
 
 def _has_error_span(f: _Field) -> bool:

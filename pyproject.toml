@@ -1,5 +1,5 @@
 [project]
-name = "dash-fn-tools"
+name = "dash-fn-interact"
 dynamic = ["version"]
 description = "An introspection-based UI generator for Plotly Dash. Automatically transform type-hinted Python functions into reactive Dash forms."
 keywords = ["plotly", "dash", "visualization", "dashboard"]
@@ -23,8 +23,8 @@ requires-python = ">=3.10"
 dependencies = ["dash>=4.0.0", "matplotlib>=3.10.8", "plotly>=6.6.0"]
 
 [project.urls]
-Homepage = "https://github.com/saemeon/dash-fn-tools"
-Repository = "https://github.com/saemeon/dash-fn-tools"
+Homepage = "https://github.com/saemeon/dash-fn-interact"
+Repository = "https://github.com/saemeon/dash-fn-interact"
 
 [dependency-groups]
 test = ["pytest", "pytest-cov"]
@@ -44,18 +44,18 @@ requires = ["setuptools>=61.0", "setuptools-scm>=8.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools_scm]
-write_to = "src/dash_fn_tools/_version.py"
+write_to = "src/dash_fn_interact/_version.py"
 version_scheme = "post-release"
 local_scheme = "no-local-version"
 
 [tool.setuptools.dynamic]
-version = { attr = "dash_fn_tools._version.__version__" }
+version = { attr = "dash_fn_interact._version.__version__" }
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-dash_fn_tools = ["py.typed"]
+dash_fn_interact = ["py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

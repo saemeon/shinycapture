@@ -1,10 +1,10 @@
-site_name: dash-fn-tools
+site_name: dash-fn-interact
 site_description: Introspection-based UI generator for Plotly Dash
 site_author: Simon Niederberger
-site_url: https://saemeon.github.io/dash-fn-tools/
+site_url: https://saemeon.github.io/dash-fn-interact/
 
-repo_url: https://github.com/saemeon/dash-fn-tools
-repo_name: saemeon/dash-fn-tools
+repo_url: https://github.com/saemeon/dash-fn-interact
+repo_name: saemeon/dash-fn-interact
 
 copyright: "Copyright &copy; 2026 Simon Niederberger"
 
@@ -130,4 +130,4 @@ extra:
     default: latest
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/saemeon/dash-fn-tools
+      link: https://github.com/saemeon/dash-fn-interact

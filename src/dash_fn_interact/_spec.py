@@ -64,16 +64,16 @@ class FromComponent(FieldHook):
 
 @dataclass
 class FieldSpec:
-    """Per-field configuration for :func:`~dash_fn_tools.build_config`.
+    """Per-field configuration for :func:`~dash_fn_interact.build_config`.
 
     Can be supplied in three ways (highest priority wins):
 
     1. **In-signature** via ``Annotated[T, FieldSpec(...)]`` — for functions
        you own.
     2. **External** via ``field_specs={"name": FieldSpec(...)}`` on
-       :func:`~dash_fn_tools.build_config` — for functions you don't own.
+       :func:`~dash_fn_interact.build_config` — for functions you don't own.
     3. Type-level ``styles`` / ``class_names`` dicts on
-       :func:`~dash_fn_tools.build_config` fill in any visual properties
+       :func:`~dash_fn_interact.build_config` fill in any visual properties
        not set by the above.
 
     A :class:`FieldHook` instance may also be passed directly as a

@@ -1,11 +1,11 @@
-# dash-fn-tools
+# dash-fn-interact
 
 An introspection-based UI generator for Plotly Dash. Automatically transform type-hinted Python functions into reactive Dash forms.
 
 ## Installation
 
 ```bash
-pip install dash-fn-tools
+pip install dash-fn-interact
 ```
 
 ## How it works
@@ -22,7 +22,7 @@ The result is a `Config` object with three things you need:
 
 ```python
 from dash import Dash, Input, Output, html
-from dash_fn_tools import build_config
+from dash_fn_interact import build_config
 
 app = Dash(__name__)
 
@@ -75,7 +75,7 @@ Pass a `FieldSpec` in the `field_specs` dict or embed it directly in the type an
 
 ```python
 from typing import Annotated
-from dash_fn_tools import build_config, FieldSpec
+from dash_fn_interact import build_config, FieldSpec
 
 def my_fn(
     name: Annotated[str, FieldSpec(label="Full name", col_span=2)],
@@ -127,7 +127,7 @@ Valid keys: `"str"`, `"int"`, `"float"`, `"bool"`, `"date"`, `"datetime"`, `"lit
 Use a `FieldHook` to populate a field from live Dash state when a dialog opens:
 
 ```python
-from dash_fn_tools import build_config, FieldSpec, FromComponent
+from dash_fn_interact import build_config, FieldSpec, FromComponent
 
 graph = dcc.Graph(id="my-graph", figure=...)
 
@@ -147,7 +147,7 @@ cfg.register_populate_callback(Input("modal", "is_open"))
 Implement `FieldHook` yourself to pull defaults from any source:
 
 ```python
-from dash_fn_tools import FieldHook
+from dash_fn_interact import FieldHook
 from dash import State
 
 class FromStore(FieldHook):
