@@ -1,5 +1,5 @@
-import s5ndt
+import dash_fn_tools
 
 
 def test_import():
-    assert s5ndt
+    assert dash_fn_tools

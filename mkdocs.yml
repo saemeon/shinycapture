@@ -1,5 +1,5 @@
 site_name: dash-fn-tools
-site_description: dash fn tools — Plotly Dash utilities
+site_description: Introspection-based UI generator for Plotly Dash
 site_author: Simon Niederberger
 site_url: https://saemeon.github.io/dash-fn-tools/
 
@@ -11,7 +11,6 @@ copyright: "Copyright &copy; 2026 Simon Niederberger"
 nav:
   - Overview: "index.md"
   - API: "api.md"
-  - Examples: "generated/gallery"
 
 theme:
   name: material
@@ -114,10 +113,6 @@ plugins:
       version_selector: True
       css_dir: css
       javascript_dir: js
-  - gallery:
-      examples_dirs: examples
-      gallery_dirs: docs/generated/gallery
-      within_subsection_order: FileNameSortKey
 extra_javascript:
   - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
 extra_css:

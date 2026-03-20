@@ -1,5 +1,5 @@
-[![PyPI](https://img.shields.io/pypi/v/s5ndt)](https://pypi.org/project/s5ndt/)
-[![Python](https://img.shields.io/pypi/pyversions/s5ndt)](https://pypi.org/project/s5ndt/)
+[![PyPI](https://img.shields.io/pypi/v/dash-fn-tools)](https://pypi.org/project/dash-fn-tools/)
+[![Python](https://img.shields.io/pypi/pyversions/dash-fn-tools)](https://pypi.org/project/dash-fn-tools/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Plotly](https://img.shields.io/badge/Plotly-3F4F75?logo=plotly&logoColor=white)](https://plotly.com/python/)
 [![Dash](https://img.shields.io/badge/Dash-008DE4?logo=plotly&logoColor=white)](https://dash.plotly.com/)
@@ -8,45 +8,59 @@
 [![ty](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ty/main/assets/badge/v0.json)](https://github.com/astral-sh/ty)
 [![prek](https://img.shields.io/badge/prek-checked-blue)](https://github.com/saemeon/prek)
 
-# s5ndt
+# dash-fn-tools
 
-s5n dash tools — Plotly Dash utilities.
+An introspection-based UI generator for Plotly Dash. Automatically transform type-hinted Python functions into reactive Dash forms.
 
-**Documentation: [saemeon.github.io/s5ndt](https://saemeon.github.io/s5ndt/)**
+**Documentation: [saemeon.github.io/dash-fn-tools](https://saemeon.github.io/dash-fn-tools/)**
 
 ## Installation
 
 ```bash
-pip install s5ndt
+pip install dash-fn-tools
 ```
 
-## Components
+## Quickstart
 
-| Component | Description |
-|-----------|-------------|
-| `mpl_export_button` | Matplotlib export wizard for `dcc.Graph` — modal with auto-generated fields, live preview, and PNG download |
-| `build_wizard` | Generic modal dialog |
-| `build_dropdown` | Generic anchored dropdown with click-outside-to-close |
-| `build_config` | Introspects a function signature into labeled Dash input fields |
-| `FromPlotly` | `FieldHook` that pre-fills a field from the live Plotly figure |
-| `FieldHook` | Base class for runtime field defaults derived from Dash component state |
+```python
+from dash import Dash, Input, Output, html
+from dash_fn_tools import build_config
 
-**Supported field types:** `str`, `int`, `float`, `bool`, `date`, `datetime`, `Literal[...]`, `list[T]`, `tuple[T, ...]`, `T | None`
+app = Dash(__name__)
 
-# How to Track Template Changes
+def my_renderer(title: str = "Chart", dpi: int = 150, show_grid: bool = True):
+    ...
 
-1. Add the remote
-run `git remote add template https://github.com/saemeon/pytemplate.git`
+cfg = build_config("render", my_renderer)
 
-2. Fetch the data
-run `git fetch template`
+app.layout = html.Div([
+    cfg.div,
+    html.Button("Apply", id="apply"),
+])
 
-3. Create a local branch that tracks the template's main
-run `git checkout -b pytemplate-main template/main`
+@app.callback(Output("result", "children"), Input("apply", "n_clicks"), *cfg.states)
+def on_apply(n, *values):
+    kwargs = cfg.build_kwargs(values)
+    # kwargs == {"title": "Chart", "dpi": 150, "show_grid": True}
+    ...
+```
 
-4. Switch back to your work branch and merge the template in
-run `git checkout main`
-run `git merge pytemplate-main --allow-unrelated-histories`
+## API
+
+| Name | Description |
+|------|-------------|
+| `build_config(id, fn, ...)` | Introspect a callable into a `Config` |
+| `Config.div` | `html.Div` with labeled input fields — embed anywhere |
+| `Config.states` | `list[State]` to pass to a Dash callback |
+| `Config.build_kwargs(values)` | Reconstruct typed `**kwargs` from callback values |
+| `Config.register_populate_callback(input)` | Auto-fill hooked fields when a dialog opens |
+| `Config.register_restore_callback(input)` | Reset all fields to defaults |
+| `FieldSpec` | Per-field customization (label, style, component override, min/max/step, hook) |
+| `FieldHook` | Base class for runtime defaults derived from Dash state |
+| `FromComponent(component, prop)` | Built-in hook — reads another component's property as the default |
+| `field_id(config_id, name)` | Compute the Dash component ID for a field |
+
+**Supported types:** `str`, `int`, `float`, `bool`, `date`, `datetime`, `Literal[...]`, `list[T]`, `tuple[T, ...]`, `T | None`
 
 ## License
 
