@@ -99,13 +99,13 @@ class _Field:
     args: tuple = ()
     optional: bool = False
     spec: Field | None = field(default=None, repr=False)
-    # spec is None until _resolve_spec is called in build_config
+    # spec is None until _resolve_spec is called in Config.__init__
 
 
 # --- Config ---
 
 
-class Config(html.Div):
+class FnForm(html.Div):
     if TYPE_CHECKING:
         states: list[State]
         _fields: list[_Field]
@@ -115,19 +115,212 @@ class Config(html.Div):
 
     def __init__(
         self,
-        children: list,
-        states: list[State],
-        fields: list[_Field],
         config_id: str,
-        fixed_values: dict | None = None,
-        form_validator: Callable[[dict], str | None] | None = None,
+        fn: Callable,
+        *,
+        _field_specs: dict[str, Field | FieldHook] | None = None,
+        _styles: dict[str, dict] | None = None,
+        _class_names: dict[str, str] | None = None,
+        _cols: int = 1,
+        _show_docstring: bool = True,
+        _exclude: list[str] | None = None,
+        _include: list[str] | None = None,
+        _initial_values: dict | object | None = None,
+        _validator: Callable[[dict], str | None] | None = None,
+        _field_components: Any = None,
+        **kwargs: Field | FieldHook | tuple,
     ):
-        super().__init__(children=children)
+        """Introspect *fn*'s signature and build the form.
+
+        Parameters
+        ----------
+        config_id :
+            Unique namespace for component IDs.
+        fn :
+            Callable whose parameters define the fields.
+            Parameters whose names match a reserved kwarg are skipped.
+        **kwargs :
+            Per-field customisation named after the function parameter.  Supported shorthands:
+
+            * ``Field(...)`` / ``FieldHook`` — passed through as-is
+            * ``(min, max)`` → ``Field(min=min, max=max)``
+            * ``(min, max, step)`` → ``Field(min=min, max=max, step=step)``
+            * ``range(a, b, step)`` → ``Field(min=a, max=b, step=step)``
+            * ``["a", "b", "c"]`` → ``dcc.Dropdown(options=[...])``
+            * ``{"Label": "value", ...}`` → ``dcc.Dropdown`` with label/value pairs
+            * ``"My Label"`` → ``Field(label="My Label")``
+            * ``dcc.Component`` → ``Field(component=component)``
+            * ``callable`` → ``Field(validator=callable)``
+
+            Overridden by ``Annotated[T, Field(...)]`` in the signature.
+            Use ``_field_specs`` when you need to build the dict programmatically.
+        _field_specs :
+            Dict-based alternative to ``**kwargs``.  Takes precedence over
+            ``**kwargs`` for the same field name.
+        _styles :
+            Type-level CSS dicts keyed by slot name (``"str"``, ``"int"``, ``"bool"``,
+            ``"date"``, ``"datetime"``, ``"literal"``, ``"enum"``, ``"dict"``,
+            ``"path"``, ``"list"``, ``"tuple"``, ``"label"``).
+        _class_names :
+            Same as *_styles* but for CSS class names.
+        _cols :
+            Number of columns in the form grid. Default ``1`` (vertical stack).
+            Use ``Field.col_span`` on individual fields to span columns.
+        _show_docstring :
+            Prepend the function's docstring as a paragraph above the fields.
+            Default ``True``.
+        _exclude :
+            Parameter names to skip entirely.
+        _include :
+            If given, only these parameters are shown, in the order listed.
+        _initial_values :
+            Pre-fill field defaults from a ``dict`` or any object with matching
+            attributes (dataclass, Pydantic model, plain object).
+        _validator :
+            Cross-field validator ``(kwargs: dict) -> str | None``.  Called after
+            per-field validation; return an error string on failure, ``None`` on
+            success.  Surfaced via :attr:`form_validation_output`.
+        _field_components :
+            Component factory: ``"dmc"``, ``"dbc"``, ``"dcc"``, ``"auto"``, or any
+            callable matching :class:`~dash_fn_interact.FieldMaker`.
+        """
+        if config_id in _registered_config_ids:
+            warnings.warn(
+                f"dash-fn-interact: config_id {config_id!r} is already in use. "
+                "Duplicate IDs will cause Dash callback errors.",
+                UserWarning,
+                stacklevel=2,
+            )
+        _registered_config_ids.add(config_id)
+
+        styles = _styles or {}
+        class_names = _class_names or {}
+
+        fixed_values: dict[str, Any] = {}
+        normalized: dict[str, Field | FieldHook] = {}
+        for name, val in kwargs.items():
+            if isinstance(val, _FieldFixed):
+                fixed_values[name] = val.value
+                continue
+            if isinstance(val, (Field, FieldHook)):
+                normalized[name] = val
+            elif isinstance(val, range):
+                normalized[name] = Field(min=val.start, max=val.stop, step=val.step)
+            elif isinstance(val, tuple):
+                if len(val) == 2:
+                    normalized[name] = Field(min=val[0], max=val[1])
+                elif len(val) == 3:
+                    normalized[name] = Field(min=val[0], max=val[1], step=val[2])
+                else:
+                    raise ValueError(
+                        f"Config kwarg {name!r}: tuple must be (min, max) or "
+                        f"(min, max, step), got {val!r}"
+                    )
+            elif isinstance(val, list):
+                normalized[name] = Field(
+                    component=dcc.Dropdown(options=val, value=val[0] if val else None)
+                )
+            elif isinstance(val, dict):
+                options = [{"label": k, "value": v} for k, v in val.items()]
+                normalized[name] = Field(
+                    component=dcc.Dropdown(
+                        options=options, value=options[0]["value"] if options else None
+                    )
+                )
+            elif isinstance(val, str):
+                normalized[name] = Field(label=val)
+            elif hasattr(val, "id") or hasattr(val, "_type"):
+                normalized[name] = Field(component=val)
+            elif callable(val):
+                normalized[name] = Field(validator=val)
+            else:
+                normalized[name] = val
+        external_specs = {**normalized, **(_field_specs or {})}
+
+        fields = _get_fields(fn, exclude=_exclude, include=_include)
+        if fixed_values:
+            fields = [f for f in fields if f.name not in fixed_values]
+
+        if _initial_values is not None:
+            for f in fields:
+                if isinstance(_initial_values, dict):
+                    if f.name in _initial_values:
+                        f.default = _initial_values[f.name]
+                elif hasattr(_initial_values, f.name):
+                    f.default = getattr(_initial_values, f.name)
+
+        for f in fields:
+            f.spec = _resolve_spec(f, external_specs, styles, class_names)
+
+        states = _build_states(config_id, fields)
+
+        from dash_fn_interact._field_components import _resolve_field_maker
+
+        field_maker = _resolve_field_maker(_field_components)
+
+        label_style = styles.get("label")
+        label_class_name = class_names.get("label", "")
+
+        children: list = []
+        if _show_docstring:
+            doc = inspect.getdoc(fn)
+            if doc:
+                children.append(
+                    html.P(
+                        doc,
+                        style={
+                            "margin": "0 0 8px 0",
+                            "fontSize": "0.875em",
+                            "color": "#555",
+                        },
+                    )
+                )
+
+        field_defaults = {f.name: f.default for f in fields}
+        for f in fields:
+            child = _build_field(config_id, f, label_style, label_class_name, field_maker)
+            if f.spec and f.spec.visible:
+                other, op, val = f.spec.visible
+                show = _check_visible(field_defaults.get(other), op, val)
+                grid: dict = (
+                    {"gridColumn": f"span {f.spec.col_span}"} if f.spec.col_span > 1 else {}
+                )
+                vis_style = {**grid, **({} if show else {"display": "none"})}
+                child = html.Div(
+                    child,
+                    id=f"_dft_vis_{config_id}_{f.name}",
+                    style=vis_style or None,
+                )
+            children.append(child)
+
+        if _cols > 1:
+            outer_style: dict = {
+                "display": "grid",
+                "gridTemplateColumns": f"repeat({_cols}, 1fr)",
+                "gap": "8px",
+            }
+        else:
+            outer_style = {"display": "flex", "flexDirection": "column", "gap": "8px"}
+
+        form_children: list = [
+            dcc.Store(id=f"_dft_dirty_{config_id}", data={}),
+            html.Div(style=outer_style, children=children),
+        ]
+        if _validator is not None:
+            form_children.append(
+                html.Small(
+                    id=f"_dft_form_err_{config_id}",
+                    children="",
+                    style={"color": "#d9534f", "fontSize": "0.8em", "display": "none"},
+                )
+            )
+
+        super().__init__(children=form_children)
         object.__setattr__(self, "states", states)
         object.__setattr__(self, "_fields", fields)
         object.__setattr__(self, "_config_id", config_id)
         object.__setattr__(self, "_fixed_values", fixed_values or {})
-        object.__setattr__(self, "_form_validator", form_validator)
+        object.__setattr__(self, "_form_validator", _validator)
 
     @property
     def dirty_states(self) -> list[State]:
@@ -148,7 +341,7 @@ class Config(html.Div):
         controlling field changes.  Supported operators: ``==``, ``!=``,
         ``"in"``, ``"not in"``.
 
-        No arguments needed — call once after ``build_config``.
+        No arguments needed — call once after constructing the :class:`Config`.
         """
         visible_fields = [f for f in self._fields if f.spec and f.spec.visible]
         if not visible_fields:
@@ -372,7 +565,7 @@ class Config(html.Div):
         Pass to a callback decorator alongside :attr:`validation_outputs`.
         Pair with :meth:`form_invalid_output` to compute the return values.
 
-        Only meaningful when ``_validator`` was passed to :func:`build_config`.
+        Only meaningful when ``_validator`` was passed to :class:`Config`.
         """
         err_id = f"_dft_form_err_{self._config_id}"
         return [
@@ -550,287 +743,6 @@ class Config(html.Div):
             return results
 
 
-# --- public ---
-
-
-def build_config(
-    config_id: str,
-    fn: Callable,
-    *,
-    _field_specs: dict[str, Field | FieldHook] | None = None,
-    _styles: dict[str, dict] | None = None,
-    _class_names: dict[str, str] | None = None,
-    _cols: int = 1,
-    _show_docstring: bool = True,
-    _exclude: list[str] | None = None,
-    _include: list[str] | None = None,
-    _initial_values: dict | object | None = None,
-    _validator: Callable[[dict], str | None] | None = None,
-    _field_components: Any = None,
-    **kwargs: Field | FieldHook | tuple,
-) -> Config:
-    """Introspect *fn*'s signature and return a :class:`Config`.
-
-    Parameters
-    ----------
-    config_id :
-        Unique namespace for component IDs.
-    fn :
-        Callable whose parameters define the fields.
-        Parameters whose names match a reserved ``build_config`` kwarg are skipped.
-    **kwargs :
-        Per-field customisation passed as keyword arguments named after the
-        function parameter.  Supported shorthand values:
-
-        * ``Field(...)`` / ``FieldHook`` — passed through as-is
-        * ``(min, max)`` → ``Field(min=min, max=max)``
-        * ``(min, max, step)`` → ``Field(min=min, max=max, step=step)``
-        * ``range(a, b, step)`` → ``Field(min=a, max=b, step=step)``
-        * ``["a", "b", "c"]`` → ``dcc.Dropdown(options=[...])``
-        * ``{"Label": "value", ...}`` → ``dcc.Dropdown`` with label/value pairs
-        * ``"My Label"`` → ``Field(label="My Label")``
-        * ``dcc.Component`` → ``Field(component=component)``
-        * ``callable`` → ``Field(validator=callable)``
-
-        Example::
-
-            cfg = build_config(
-                "render", fn,
-                dpi=range(72, 300, 1),
-                method={"Newton": "newton", "Euler": "euler"},
-                title="Chart title",
-                score=lambda v: "Must be 0–1" if not 0 <= v <= 1 else None,
-            )
-
-        Overridden by ``Annotated[T, Field(...)]`` in the signature.
-        Use ``_field_specs`` when you need to build the dict programmatically.
-    _field_specs :
-        Dict-based alternative to ``**kwargs``.  Takes precedence over
-        ``**kwargs`` for the same field name.
-    _styles :
-        Type-level CSS dicts, keyed by slot name.  Applied to every field
-        of that type unless the field has its own ``Field.style``.
-
-        * ``"str"`` → ``dcc.Input(type="text")``
-        * ``"int"`` → ``dcc.Input(type="number", step=1)``
-        * ``"float"`` → ``dcc.Input(type="number", step="any")``
-        * ``"bool"`` → ``dcc.Checklist``
-        * ``"date"`` → ``dcc.DatePickerSingle``
-        * ``"datetime"`` → ``dcc.DatePickerSingle`` + ``dcc.Input(type="text")``
-        * ``"literal"`` → ``dcc.Dropdown``
-        * ``"enum"`` → ``dcc.Dropdown`` (from ``Enum`` subclass)
-        * ``"dict"`` → ``dcc.Textarea`` (JSON, coerced via ``json.loads``)
-        * ``"path"`` → ``dcc.Input(type="text")`` (coerced via ``pathlib.Path``)
-        * ``"list"`` / ``"tuple"`` → ``dcc.Input(type="text")``
-        * ``"label"`` → ``html.Label`` on every field label
-    _class_names :
-        Same as *_styles* but for CSS class names.
-    _cols :
-        Number of columns in the form grid. Default ``1`` (vertical stack).
-        Use ``Field.col_span`` on individual fields to span columns.
-    _show_docstring :
-        Prepend the function's docstring as a paragraph above the fields.
-        Default ``True``.
-    _exclude :
-        Parameter names to skip entirely.
-    _include :
-        If given, only these parameters are shown, in the order listed.
-    _initial_values :
-        Pre-fill field defaults from a ``dict`` or any object with matching
-        attributes.  Supports both key lookup (``dict``) and ``getattr`` fallback
-        (dataclass, Pydantic model, plain object).  Fields not present in
-        *_initial_values* keep their signature defaults.
-
-        Example::
-
-            cfg = build_config("edit", my_fn, _initial_values={"dpi": 300})
-            cfg = build_config("edit", my_fn, _initial_values=current_settings)
-
-    _validator :
-        Cross-field validator called with the full ``kwargs`` dict after all
-        per-field validation passes.  Return a human-readable error string on
-        failure, ``None`` on success.  Only called when there are no per-field
-        errors.
-
-        Example::
-
-            def check(kw):
-                if kw["end"] <= kw["start"]:
-                    return "End must be greater than start"
-
-            cfg = build_config("id", fn, _validator=check)
-
-        The error is surfaced via :attr:`form_validation_output` and
-        :meth:`form_invalid_output`.  It is also included in the ``errors``
-        dict returned by :meth:`build_kwargs_validated` under the key
-        ``"_form"``.
-    _field_components :
-        The component library used to render the form controls.
-        Pass ``"dmc"``, ``"dbc"``, or ``"dcc"`` (explicit fallback), or a custom
-        callable matching :class:`~dash_fn_interact._field_components.FieldMaker`.
-        Omitting it (or passing ``"auto"``) picks ``"dmc"`` when
-        ``dash-mantine-components`` is installed, otherwise ``"dcc"``.
-
-    Returns
-    -------
-    Config
-        The ``Config`` itself is an ``html.Div`` — embed it directly in the layout.
-        ``.states`` — ``list[State]`` matching the fields (pass to a callback).
-        ``.build_kwargs(values)`` — reconstruct a ``dict`` from callback values.
-        ``.register_populate_callback(open_input)`` — wire hook defaults on open.
-        ``.register_restore_callback(restore_input)`` — reset all fields.
-    """
-    if config_id in _registered_config_ids:
-        warnings.warn(
-            f"dash-fn-interact: config_id {config_id!r} is already in use. "
-            "Duplicate IDs will cause Dash callback errors.",
-            UserWarning,
-            stacklevel=2,
-        )
-    _registered_config_ids.add(config_id)
-
-    styles = _styles or {}
-    class_names = _class_names or {}
-
-    # Normalize **kwargs shorthands and merge with _field_specs.
-    # _field_specs wins over **kwargs for the same field name.
-    # _FieldFixed values are collected separately — not rendered, injected in build_kwargs.  # noqa: E501
-    fixed_values: dict[str, Any] = {}
-    normalized: dict[str, Field | FieldHook] = {}
-    for name, val in kwargs.items():
-        if isinstance(val, _FieldFixed):
-            fixed_values[name] = val.value
-            continue
-        if isinstance(val, (Field, FieldHook)):
-            normalized[name] = val
-        elif isinstance(val, range):
-            # range(start, stop, step) → Field(min, max, step)
-            normalized[name] = Field(min=val.start, max=val.stop, step=val.step)
-        elif isinstance(val, tuple):
-            # (min, max) or (min, max, step)
-            if len(val) == 2:
-                normalized[name] = Field(min=val[0], max=val[1])
-            elif len(val) == 3:
-                normalized[name] = Field(min=val[0], max=val[1], step=val[2])
-            else:
-                raise ValueError(
-                    f"build_config kwarg {name!r}: tuple must be (min, max) or "
-                    f"(min, max, step), got {val!r}"
-                )
-        elif isinstance(val, list):
-            # list → Dropdown with those options
-            normalized[name] = Field(
-                component=dcc.Dropdown(options=val, value=val[0] if val else None)
-            )
-        elif isinstance(val, dict):
-            # dict → Dropdown with label/value pairs
-            options = [{"label": k, "value": v} for k, v in val.items()]
-            normalized[name] = Field(
-                component=dcc.Dropdown(
-                    options=options, value=options[0]["value"] if options else None
-                )
-            )
-        elif isinstance(val, str):
-            # plain string → label override
-            normalized[name] = Field(label=val)
-        elif hasattr(val, "id") or hasattr(val, "_type"):
-            # Dash component → component override
-            normalized[name] = Field(component=val)
-        elif callable(val):
-            # bare callable → validator
-            normalized[name] = Field(validator=val)
-        else:
-            normalized[name] = val
-    external_specs = {**normalized, **(_field_specs or {})}
-
-    fields = _get_fields(fn, exclude=_exclude, include=_include)
-    if fixed_values:
-        fields = [f for f in fields if f.name not in fixed_values]
-
-    if _initial_values is not None:
-        for f in fields:
-            if isinstance(_initial_values, dict):
-                if f.name in _initial_values:
-                    f.default = _initial_values[f.name]
-            elif hasattr(_initial_values, f.name):
-                f.default = getattr(_initial_values, f.name)
-
-    for f in fields:
-        f.spec = _resolve_spec(f, external_specs, styles, class_names)
-
-    states = _build_states(config_id, fields)
-
-    from dash_fn_interact._field_components import _resolve_field_maker
-
-    field_maker = _resolve_field_maker(_field_components)
-
-    label_style = styles.get("label")
-    label_class_name = class_names.get("label", "")
-
-    children: list = []
-    if _show_docstring:
-        doc = inspect.getdoc(fn)
-        if doc:
-            children.append(
-                html.P(
-                    doc,
-                    style={
-                        "margin": "0 0 8px 0",
-                        "fontSize": "0.875em",
-                        "color": "#555",
-                    },
-                )
-            )
-
-    field_defaults = {f.name: f.default for f in fields}
-    for f in fields:
-        child = _build_field(config_id, f, label_style, label_class_name, field_maker)
-        if f.spec and f.spec.visible:
-            other, op, val = f.spec.visible
-            show = _check_visible(field_defaults.get(other), op, val)
-            grid: dict = (
-                {"gridColumn": f"span {f.spec.col_span}"} if f.spec.col_span > 1 else {}
-            )
-            vis_style = {**grid, **({} if show else {"display": "none"})}
-            child = html.Div(
-                child,
-                id=f"_dft_vis_{config_id}_{f.name}",
-                style=vis_style or None,
-            )
-        children.append(child)
-
-    if _cols > 1:
-        outer_style: dict = {
-            "display": "grid",
-            "gridTemplateColumns": f"repeat({_cols}, 1fr)",
-            "gap": "8px",
-        }
-    else:
-        outer_style = {"display": "flex", "flexDirection": "column", "gap": "8px"}
-
-    form_err_children: list = [
-        dcc.Store(id=f"_dft_dirty_{config_id}", data={}),
-        html.Div(style=outer_style, children=children),
-    ]
-    if _validator is not None:
-        form_err_children.append(
-            html.Small(
-                id=f"_dft_form_err_{config_id}",
-                children="",
-                style={"color": "#d9534f", "fontSize": "0.8em", "display": "none"},
-            )
-        )
-
-    return Config(
-        form_err_children,
-        states,
-        fields,
-        config_id,
-        fixed_values or None,
-        form_validator=_validator,
-    )
-
-
 # --- internals ---
 
 
@@ -985,7 +897,7 @@ def _get_fields(
                 default=raw_default,
                 args=args,
                 optional=optional,
-                spec=annotated_spec,  # None → resolved later in build_config
+                spec=annotated_spec,  # None → resolved later in Config.__init__
             )
         )
 
@@ -999,7 +911,7 @@ def _get_fields(
 # Field types with built-in coercion validation.
 _VALIDATABLE = frozenset({"str", "int", "float", "list", "tuple", "path"})
 
-# build_config kwargs that must not appear as field names.
+# Config.__init__ kwargs that must not appear as field names.
 _RESERVED = frozenset(
     {
         "_field_specs",

@@ -10,7 +10,7 @@ from typing import Any
 
 from dash import Input, Output, State, callback, dcc, html
 
-from dash_fn_interact._config_builder import Config, build_config
+from dash_fn_interact._config_builder import FnForm
 
 
 def interact(
@@ -45,8 +45,8 @@ def interact(
         update).  ``True`` — an *Apply* button is added; callback fires on
         click only.
     **kwargs :
-        Per-field shorthands passed directly to :func:`build_config` — same
-        syntax as ``build_config`` keyword arguments (``Field``, tuples,
+        Per-field shorthands passed directly to :func:`FnForm` — same
+        syntax as ``FnForm`` keyword arguments (``Field``, tuples,
         ``range``, lists, etc.).
 
     Returns
@@ -61,7 +61,7 @@ def interact(
     -----
     ``config_id`` is derived from ``fn.__name__``.  Calling ``interact()``
     twice with the same function will trigger a duplicate-ID warning — use
-    :func:`build_config` directly if you need two panels for the same function.
+    :func:`FnForm` directly if you need two panels for the same function.
 
     Examples
     --------
@@ -95,7 +95,7 @@ def interact(
     config_id = fn.__name__
     output_id = f"_dft_interact_out_{config_id}"
 
-    cfg: Config = build_config(config_id, fn, **kwargs)
+    cfg: FnForm = FnForm(config_id, fn, **kwargs)
 
     output_div = html.Div(id=output_id, style={"marginTop": "16px"})
 
