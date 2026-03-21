@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from enum import Enum
 from typing import (
+    TYPE_CHECKING,
     Annotated,
     Any,
     Literal,
@@ -105,6 +106,13 @@ class _Field:
 
 
 class Config(html.Div):
+    if TYPE_CHECKING:
+        states: list[State]
+        _fields: list[_Field]
+        _config_id: str
+        _fixed_values: dict[str, Any]
+        _form_validator: Callable[[dict], str | None] | None
+
     def __init__(
         self,
         children: list,
@@ -112,12 +120,14 @@ class Config(html.Div):
         fields: list[_Field],
         config_id: str,
         fixed_values: dict | None = None,
+        form_validator: Callable[[dict], str | None] | None = None,
     ):
         super().__init__(children=children)
         object.__setattr__(self, "states", states)
         object.__setattr__(self, "_fields", fields)
         object.__setattr__(self, "_config_id", config_id)
         object.__setattr__(self, "_fixed_values", fixed_values or {})
+        object.__setattr__(self, "_form_validator", form_validator)
 
     @property
     def dirty_states(self) -> list[State]:
@@ -301,6 +311,14 @@ class Config(html.Div):
                         errors[f.name] = custom_err
                 kwargs[f.name] = coerced
         kwargs.update(self._fixed_values)
+        form_validator = object.__getattribute__(self, "_form_validator")
+        if not errors and form_validator is not None:
+            try:
+                form_err = form_validator(kwargs)
+            except Exception as exc:
+                form_err = str(exc)
+            if form_err:
+                errors["_form"] = form_err
         return kwargs, errors
 
     @property
@@ -344,6 +362,38 @@ class Config(html.Div):
                     }
                 )
         return result
+
+    @property
+    def form_validation_output(self) -> list[Output]:
+        """``Output`` objects for the form-level error span.
+
+        Returns two outputs: the error message text and its visibility style.
+        Pass to a callback decorator alongside :attr:`validation_outputs`.
+        Pair with :meth:`form_invalid_output` to compute the return values.
+
+        Only meaningful when ``_validator`` was passed to :func:`build_config`.
+        """
+        err_id = f"_dft_form_err_{self._config_id}"
+        return [
+            Output(err_id, "children", allow_duplicate=True),
+            Output(err_id, "style", allow_duplicate=True),
+        ]
+
+    def form_invalid_output(self, error: str | None) -> list:
+        """Convert a form-level error to values for :attr:`form_validation_output`.
+
+        Pass the ``errors.get("_form")`` value (or ``None`` to clear).
+        Returns ``[message, style_dict]``.
+        """
+        msg = error or ""
+        return [
+            msg,
+            {
+                "color": "#d9534f",
+                "fontSize": "0.8em",
+                "display": "block" if msg else "none",
+            },
+        ]
 
     def register_populate_callback(self, open_input: Input) -> None:
         """Register a single callback that populates all hooked fields on open.
@@ -514,6 +564,7 @@ def build_config(
     _exclude: list[str] | None = None,
     _include: list[str] | None = None,
     _initial_values: dict | object | None = None,
+    _validator: Callable[[dict], str | None] | None = None,
     **kwargs: Field | FieldHook | tuple,
 ) -> Config:
     """Introspect *fn*'s signature and return a :class:`Config`.
@@ -592,6 +643,25 @@ def build_config(
 
             cfg = build_config("edit", my_fn, _initial_values={"dpi": 300})
             cfg = build_config("edit", my_fn, _initial_values=current_settings)
+
+    _validator :
+        Cross-field validator called with the full ``kwargs`` dict after all
+        per-field validation passes.  Return a human-readable error string on
+        failure, ``None`` on success.  Only called when there are no per-field
+        errors.
+
+        Example::
+
+            def check(kw):
+                if kw["end"] <= kw["start"]:
+                    return "End must be greater than start"
+
+            cfg = build_config("id", fn, _validator=check)
+
+        The error is surfaced via :attr:`form_validation_output` and
+        :meth:`form_invalid_output`.  It is also included in the ``errors``
+        dict returned by :meth:`build_kwargs_validated` under the key
+        ``"_form"``.
 
     Returns
     -------
@@ -726,15 +796,26 @@ def build_config(
     else:
         outer_style = {"display": "flex", "flexDirection": "column", "gap": "8px"}
 
+    form_err_children: list = [
+        dcc.Store(id=f"_dft_dirty_{config_id}", data={}),
+        html.Div(style=outer_style, children=children),
+    ]
+    if _validator is not None:
+        form_err_children.append(
+            html.Small(
+                id=f"_dft_form_err_{config_id}",
+                children="",
+                style={"color": "#d9534f", "fontSize": "0.8em", "display": "none"},
+            )
+        )
+
     return Config(
-        [
-            dcc.Store(id=f"_dft_dirty_{config_id}", data={}),
-            html.Div(style=outer_style, children=children),
-        ],
+        form_err_children,
         states,
         fields,
         config_id,
         fixed_values or None,
+        form_validator=_validator,
     )
 
 
@@ -917,6 +998,7 @@ _RESERVED = frozenset(
         "_exclude",
         "_include",
         "_initial_values",
+        "_validator",
     }
 )
 
