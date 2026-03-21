@@ -32,28 +32,44 @@ class Page:
     order, then call :meth:`run` to launch — no manual ``app.layout`` wiring
     needed.
 
+    Parameters
+    ----------
+    max_width :
+        CSS ``max-width`` of the outer ``html.Div`` in pixels.  Defaults to 960.
+    manual :
+        Default value for the ``_manual`` argument of every :meth:`interact`
+        call on this page.  ``True`` adds an *Apply* button to every panel.
+
     Examples
     --------
     ::
 
-        page = Page()
+        page = Page(manual=True)
 
-        page.add(html.H1("My App"))
+        page.H1("My App")
 
         @page.interact
         def sine_wave(amplitude: float = 1.0, frequency: float = 2.0):
             ...
 
-        page.add(html.Hr())
+        page.Hr()
+        page.H2("Histogram")
 
         @page.interact(amplitude=(0.0, 3.0, 0.1))
-        def histogram(n_samples: int = 500, mean: float = 0.0):
+        def histogram(n_samples: int = 500):
             ...
 
         page.run(debug=True)
     """
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        max_width: int = 960,
+        manual: bool = False,
+    ) -> None:
+        self._max_width = max_width
+        self._manual = manual
         self._divs: list[Any] = []
 
     # ------------------------------------------------------------------
@@ -63,7 +79,7 @@ class Page:
         self,
         fn: Callable | None = None,
         *,
-        _manual: bool = False,
+        _manual: bool | None = None,
         **kwargs: Any,
     ) -> html.Div | Callable:
         """Add an interact panel to the page.
@@ -78,30 +94,43 @@ class Page:
             Callable whose signature drives the form.  When omitted a
             decorator is returned — useful for ``@page.interact(...)`` syntax.
         _manual :
-            Add an *Apply* button instead of live updates.
+            Override the page-level ``manual`` default for this panel only.
         **kwargs :
             Per-field shorthands forwarded to :func:`~dash_fn_interact.interact`.
         """
+        effective_manual = self._manual if _manual is None else _manual
+
         if fn is None:
             def decorator(f: Callable) -> html.Div:
                 return self.interact(f, _manual=_manual, **kwargs)
             return decorator
 
-        panel = _interact(fn, _manual=_manual, **kwargs)
+        panel = _interact(fn, _manual=effective_manual, **kwargs)
         self._divs.append(panel)
         return panel
 
     def add(self, *components: Any) -> None:
         """Append arbitrary Dash components to the page.
 
-        Use this for headings, dividers, descriptive text, or any layout
-        element that does not come from a function form.
-
         Example::
 
-            page.add(html.H2("Section title"), html.Hr())
+            page.add(html.H2("Section"), html.Hr())
         """
         self._divs.extend(components)
+
+    def __getattr__(self, name: str) -> Any:
+        """Forward PascalCase attribute access to ``dash.html``.
+
+        Allows ``page.H1("title")`` as shorthand for
+        ``page.add(html.H1("title"))``.  Only fires when normal attribute
+        lookup fails, so existing methods are never shadowed.
+        """
+        component_cls = getattr(html, name, None)
+        if component_cls is not None:
+            def _add(*args: Any, **kwargs: Any) -> None:
+                self.add(component_cls(*args, **kwargs))
+            return _add
+        raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
 
     # ------------------------------------------------------------------
     # Assembly
@@ -109,23 +138,23 @@ class Page:
     def build_app(self, *, name: str | None = None) -> Dash:
         """Assemble and return a configured :class:`~dash.Dash` app.
 
-        The app's ``layout`` is set to an ``html.Div`` containing all panels
-        and components added so far, in insertion order.  All callbacks have
-        already been registered by the individual :meth:`interact` calls.
-
         Parameters
         ----------
         name :
             Passed to ``Dash(name)``.  Defaults to the caller's ``__name__``
-            (resolved via the call stack), which is correct for scripts run
-            directly with ``python app.py``.
+            resolved via the call stack.
         """
         if name is None:
             name = _caller_name()
+
         app = Dash(name)
         app.layout = html.Div(
             self._divs,
-            style={"fontFamily": "sans-serif", "padding": "32px", "maxWidth": "960px"},
+            style={
+                "fontFamily": "sans-serif",
+                "padding": "32px",
+                "maxWidth": f"{self._max_width}px",
+            },
         )
         return app
 
