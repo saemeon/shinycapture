@@ -27,11 +27,18 @@ from __future__ import annotations
 
 import json
 from datetime import date, datetime
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol, get_args, get_origin
 
 from dash import dcc, html
 
 from dash_fn_interact._spec import Field
+
+
+def _list_literal_args(f: Any) -> tuple | None:
+    """Return the Literal values if *f* is a ``list[Literal[...]]`` field, else ``None``."""
+    if f.type == "list" and f.args and get_origin(f.args[0]) is Literal:
+        return get_args(f.args[0])
+    return None
 
 
 class FieldMaker(Protocol):
@@ -170,6 +177,17 @@ def make_dcc_field(config_id: str, f: Any, spec: Field, fid: str) -> Any:
             className=spec.class_name,
         )
     if f.type in ("list", "tuple"):
+        lit_args = _list_literal_args(f)
+        if lit_args is not None:
+            default = f.default if isinstance(f.default, list) else []
+            return dcc.Dropdown(
+                id=fid,
+                options=list(lit_args),
+                value=default,
+                multi=True,
+                style=spec.style,
+                className=spec.class_name,
+            )
         if f.type == "tuple":
             placeholder = ", ".join(t.__name__ for t in f.args)
         else:
@@ -310,6 +328,19 @@ def make_dmc_field(config_id: str, f: Any, spec: Field, fid: str) -> Any:
             className=spec.class_name,
         )
 
+    if f.type == "list":
+        lit_args = _list_literal_args(f)
+        if lit_args is not None and all(isinstance(v, str) for v in lit_args):
+            default = f.default if isinstance(f.default, list) else []
+            return dmc.MultiSelect(
+                id=fid,
+                data=list(lit_args),
+                value=default,
+                style=spec.style,
+                className=spec.class_name,
+            )
+        # non-literal list or non-string literals — fall through to TextInput
+
     if f.type == "dict":
         default_str = json.dumps(f.default, indent=2) if f.default else ""
         return dmc.Textarea(
@@ -424,6 +455,18 @@ def make_dbc_field(config_id: str, f: Any, spec: Field, fid: str) -> Any:
         )
 
     if f.type in ("list", "tuple"):
+        lit_args = _list_literal_args(f)
+        if lit_args is not None:
+            # DBC has no multi-select; fall back to dcc.Dropdown(multi=True)
+            default = f.default if isinstance(f.default, list) else []
+            return dcc.Dropdown(
+                id=fid,
+                options=list(lit_args),
+                value=default,
+                multi=True,
+                style=spec.style,
+                className=spec.class_name,
+            )
         if f.type == "tuple":
             placeholder = ", ".join(t.__name__ for t in f.args)
         else:

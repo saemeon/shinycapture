@@ -1100,6 +1100,13 @@ def _get_fields(
     return fields
 
 
+def _list_literal_args(f: _Field) -> tuple | None:
+    """Return the Literal values if *f* is a ``list[Literal[...]]`` field, else ``None``."""
+    if f.type == "list" and f.args and get_origin(f.args[0]) is Literal:
+        return get_args(f.args[0])
+    return None
+
+
 # Field types with built-in coercion validation.
 _VALIDATABLE = frozenset({"str", "int", "float", "list", "tuple", "path"})
 
@@ -1135,6 +1142,8 @@ def _to_widget_value(f: _Field, val: Any) -> Any:
     if f.type == "bool":
         return [f.name] if val else []
     if f.type in ("list", "tuple"):
+        if f.type == "list" and _list_literal_args(f) is not None:
+            return val if isinstance(val, list) else []
         return ", ".join(str(v) for v in val) if val else ""
     if f.type == "enum":
         return val.name if isinstance(val, Enum) else (val or "")
@@ -1165,12 +1174,15 @@ def _validate(f: _Field, value: Any) -> str | None:
         elif f.type == "float":
             float(value)
         elif f.type in ("list", "tuple"):
-            items = [x.strip() for x in str(value).split(",") if x.strip()]
-            if f.type == "list":
-                elem_type = f.args[0] if f.args else str
-                [elem_type(x) for x in items]
-            elif f.args:
-                tuple(t(v) for t, v in zip(f.args, items, strict=False))
+            if f.type == "list" and _list_literal_args(f) is not None:
+                items = value if isinstance(value, list) else []
+            else:
+                items = [x.strip() for x in str(value).split(",") if x.strip()]
+                if f.type == "list":
+                    elem_type = f.args[0] if f.args else str
+                    [elem_type(x) for x in items]
+                elif f.args:
+                    tuple(t(v) for t, v in zip(f.args, items, strict=False))
             spec = f.spec
             if spec:
                 if spec.min_length is not None and len(items) < spec.min_length:
@@ -1291,6 +1303,8 @@ def _coerce(f: _Field, value: Any) -> Any:
         if f.type == "float":
             return float(value)
         if f.type == "list":
+            if _list_literal_args(f) is not None:
+                return value if isinstance(value, list) else []
             elem_type = f.args[0] if f.args else str
             return [elem_type(x.strip()) for x in value.split(",")]
         if f.type == "tuple":
