@@ -1,14 +1,52 @@
-[![PyPI](https://img.shields.io/pypi/v/dash-interact)](https://pypi.org/project/dash-interact/)
 [![Python](https://img.shields.io/pypi/pyversions/dash-interact)](https://pypi.org/project/dash-interact/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-[![Plotly](https://img.shields.io/badge/Plotly-3F4F75?logo=plotly&logoColor=white)](https://plotly.com/python/)
-[![Dash](https://img.shields.io/badge/Dash-008DE4?logo=plotly&logoColor=white)](https://dash.plotly.com/)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
 
-# dash-interact
+# dash-fn-tools
 
-Build interactive Plotly Dash apps from type-hinted Python functions — pyplot-style, no boilerplate.
+A framework for packaging organizational chart standards as installable Python libraries, with companion tools for interactive dashboards and one-click export from Dash and Shiny.
+
+## Packages
+
+### Framework
+
+| Package | Description |
+|---------|-------------|
+| **mpl-brand** | Generic matplotlib corporate-design framework. Subclass, configure hooks, ship as `pip install your-brand`. |
+| **corpframe** | Example implementation — a concrete corporate design using mpl-brand. |
+
+### Forms & Interaction (Dash)
+
+| Package | Install | Description |
+|---------|---------|-------------|
+| **dash-fn-forms** | `pip install dash-fn-forms` | Generate Dash forms from typed Python function signatures. |
+| **dash-interact** | `pip install dash-interact` | pyplot-style convenience layer — `page.interact()`, HTML shorthands. Includes dash-fn-forms. |
+
+### Capture & Export
+
+| Package | Language | Description |
+|---------|----------|-------------|
+| **dash-capture** | Python/Dash | Browser capture pipeline — preprocess, capture, postprocess. Pluggable strategies for Plotly, html2canvas, canvas. |
+| **shinycapture** | R/Shiny | Same capture pipeline for Shiny applications. |
+| **corpframe** (R) | R | Thin R wrapper — calls Python corpframe via subprocess. |
+
+## Architecture
+
+```
+mpl-brand                    ← framework: "package your chart standards"
+  └── corpframe              ← your company's implementation
+
+dash-fn-forms                ← framework: "forms from functions"
+  ├── dash-interact          ← convenience: page API, interact()
+  └── dash-capture           ← toolkit: browser capture pipeline
+        └── corpframe[dash]  ← one-click corporate export
+
+shinycapture                 ← toolkit: browser capture for Shiny
+  └── corpframe (R)          ← one-click corporate export in R
+```
+
+## Quick Example
 
 ```python
 from dash_interact import page
@@ -16,119 +54,13 @@ from dash_interact import page
 page.H1("My App")
 
 @page.interact
-def sine_wave(amplitude: float = 1.0, frequency: float = 2.0, n_cycles: int = 3):
+def sine_wave(amplitude: float = 1.0, frequency: float = 2.0):
     import numpy as np, plotly.graph_objects as go
-    x = np.linspace(0, n_cycles * 2 * np.pi, 600)
+    x = np.linspace(0, 6 * np.pi, 600)
     return go.Figure(go.Scatter(x=x, y=amplitude * np.sin(frequency * x)))
 
-page.run(debug=True)
+page.run()
 ```
-
-## Installation
-
-```bash
-pip install dash-interact
-```
-
-## How it works
-
-`@page.interact` inspects the function signature and generates a Dash form automatically:
-
-- `float` / `int` → slider or number input
-- `bool` → checkbox
-- `Literal[...]` → dropdown
-- `str` → text input
-- `date` / `datetime` → date picker
-
-The return value is rendered automatically — Plotly figures become `dcc.Graph`, DataFrames become a `DataTable`, strings become Markdown, and so on.
-
-## Quickstart
-
-### Implicit (pyplot-style)
-
-```python
-from dash_interact import page
-
-page.H1("Dashboard")
-
-@page.interact
-def histogram(n_samples: int = 500, bins: int = 40):
-    import numpy as np, plotly.graph_objects as go
-    data = np.random.default_rng(42).normal(size=n_samples)
-    return go.Figure(go.Histogram(x=data, nbinsx=bins))
-
-page.run(debug=True)
-```
-
-### Explicit (embed into a larger layout)
-
-```python
-from dash import Dash, html
-from dash_interact import Page
-
-p = Page()
-p.H1("Dashboard")
-
-@p.interact
-def histogram(n_samples: int = 500, bins: int = 40):
-    ...
-
-app = Dash(__name__)
-app.layout = html.Div([navbar, p, footer])
-app.run(debug=True)
-```
-
-### Field customization
-
-```python
-from dash_interact import page
-from dash_fn_forms import Field
-
-@page.interact(amplitude=(0.1, 3.0, 0.1))   # tuple → min/max/step
-def sine_wave(
-    amplitude: float = 1.0,
-    frequency: float = 2.0,
-    label: str = Field(label="Title", description="Chart title"),
-):
-    ...
-```
-
-### Custom renderers
-
-```python
-import pandas as pd
-from dash import dash_table
-from dash_fn_forms import register_renderer
-
-register_renderer(
-    pd.DataFrame,
-    lambda df: dash_table.DataTable(data=df.to_dict("records")),
-)
-
-@page.interact
-def get_data(rows: int = 10) -> pd.DataFrame:
-    ...  # returned DataFrame is rendered as a DataTable automatically
-```
-
-## Packages
-
-This repo contains two packages:
-
-| Package | Install | Description |
-|---------|---------|-------------|
-| `dash-interact` | `pip install dash-interact` | pyplot-style page API (`page`, `interact`, `Page`) |
-| `dash-fn-forms` | `pip install dash-fn-forms` | headless engine (`build_fn_panel`, `FnForm`, `Field`) |
-
-Most users should install `dash-interact` — it includes the engine.
-
-## Credits
-
-| Feature | Inspiration |
-|---------|-------------|
-| `interact()` | [ipywidgets](https://ipywidgets.readthedocs.io/) — derive controls from a function signature |
-| `page` singleton | [matplotlib.pyplot](https://matplotlib.org/stable/api/pyplot_summary.html) — implicit module-level state |
-| top-to-bottom authoring | [Streamlit](https://streamlit.io/) / [Shiny Express](https://shiny.posit.co/py/docs/express.html) |
-| visibility rules | [dash-pydantic-form](https://github.com/RenaudLN/dash-pydantic-form) |
 
 ## License
 

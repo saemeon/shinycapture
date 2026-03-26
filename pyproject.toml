@@ -1,9 +1,13 @@
 [tool.uv.workspace]
 members = ["packages/*"]
+exclude = ["packages/corpframe-gallery", "packages/mcd", "packages/corpplt", "packages/corporate-design-packager"]
 
 [tool.uv.sources]
 dash-fn-forms = { workspace = true }
 dash-capture = { workspace = true }
+mpl-brandpacker = { workspace = true }
+corpframe = { workspace = true }
+gallery-viewer = { workspace = true }
 
 [dependency-groups]
 test = ["pytest", "pytest-cov"]
@@ -22,6 +26,7 @@ dev = [
     "dash-bootstrap-components>=2.0.4",
     "annotated-types>=0.7.0",
     "dash[testing]",
+    "dash-ace>=0.2.1",
     { include-group = "test" },
     { include-group = "doc" },
 ]
