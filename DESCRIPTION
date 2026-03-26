@@ -10,8 +10,8 @@ Description: Three-stage pluggable capture pipeline (preprocess, capture,
     html2canvas. Returns raw bytes as reactive values for server-side
     processing (e.g. corporate framing, annotation, format conversion).
 License: MIT + file LICENSE
-URL: https://github.com/saemeon/dash-interact
-BugReports: https://github.com/saemeon/dash-interact/issues
+URL: https://github.com/saemeon/shinycapture
+BugReports: https://github.com/saemeon/shinycapture/issues
 Imports:
     shiny (>= 1.7.0),
     htmltools,
