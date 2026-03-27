@@ -1,0 +1,155 @@
+---
+title: "Getting started with shinycapture"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Getting started with shinycapture}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  eval = FALSE
+)
+```
+
+## Why browser-side capture?
+
+Plotly charts in Shiny are rendered by JavaScript in the user's browser —
+the R server never holds the chart as pixels. Standard server-side tools like
+`ggplot2::ggsave()` cannot capture a Plotly figure. While headless-browser
+approaches (`webshot2`, `chromote`) are possible, they re-render the chart from
+scratch in a separate process and require a server-side Chrome installation.
+
+shinycapture triggers the capture directly in the running browser and sends the
+result back to R — no server-side Chrome required.
+
+## Basic usage
+
+```{r}
+library(shiny)
+library(plotly)
+library(shinycapture)
+
+ui <- fluidPage(
+  plotlyOutput("my_plot"),
+  actionButton("capture_btn", "Export PNG"),
+  uiOutput("preview")
+)
+
+server <- function(input, output, session) {
+  output$my_plot <- renderPlotly({
+    plot_ly(x = ~rnorm(100), type = "histogram")
+  })
+
+  # Step 1: trigger capture in the browser
+  observeEvent(input$capture_btn, {
+    capture_plotly("my_plot",
+      strategy = plotly_strategy(width = 1200, height = 800)
+    )
+  })
+
+  # Step 2: react when the result arrives as a base64 data-URI string
+  observeEvent(input[[".shinycapture.my_plot"]], {
+    # Display in the UI — use the base64 string directly as img src
+    output$preview <- renderUI(
+      tags$img(src = input[[".shinycapture.my_plot"]])
+    )
+  })
+}
+
+shinyApp(ui, server)
+```
+
+The capture result arrives in `input[[".shinycapture.<id>"]]` as a base64
+data-URI string. Use it directly as an `<img>` `src` for display, or decode
+it to raw bytes with `base64_decode()` for saving or further processing.
+
+## Saving to disk
+
+```{r}
+observeEvent(input[[".shinycapture.my_plot"]], {
+  bytes <- base64_decode(input[[".shinycapture.my_plot"]])
+  writeBin(bytes, "export.png")
+})
+```
+
+## Offering a download button
+
+```{r}
+captured_bytes <- reactiveVal(NULL)
+
+observeEvent(input$capture_btn, {
+  capture_plotly("my_plot", input_id = ".shinycapture.dl")
+})
+
+observeEvent(input[[".shinycapture.dl"]], {
+  captured_bytes(base64_decode(input[[".shinycapture.dl"]]))
+  output$download_ui <- renderUI(downloadButton("dl", "Download PNG"))
+})
+
+output$dl <- downloadHandler(
+  filename = function() "chart.png",
+  content  = function(file) writeBin(captured_bytes(), file)
+)
+```
+
+## Capture strategies
+
+### Plotly — exact resolution with strip patches
+
+`plotly_strategy()` uses `Plotly.toImage()` for pixel-perfect output.
+Strip flags remove chart decorations before capture without affecting
+the live chart — they operate on a hidden off-screen clone.
+
+```{r}
+capture_plotly("my_plot",
+  strategy = plotly_strategy(
+    strip_title  = TRUE,   # remove title
+    strip_legend = TRUE,   # remove legend
+    width  = 2400,
+    height = 1600,
+    format = "png"         # or "jpeg", "webp", "svg"
+  )
+)
+```
+
+### html2canvas — any HTML element
+
+`html2canvas_strategy()` can capture any DOM element, not just Plotly charts.
+The `scale` parameter controls resolution: `2` (default) gives double density,
+suitable for retina displays; `3` for print quality.
+
+```{r}
+capture_element("my_table_div",
+  strategy = html2canvas_strategy(scale = 3)
+)
+```
+
+## Custom input IDs
+
+By default the result lands in `input[[".shinycapture.<id>"]]`. Pass
+`input_id` to use a different name — useful when capturing the same element
+multiple times with different strategies.
+
+```{r}
+capture_plotly("my_plot",
+  strategy = plotly_strategy(format = "svg"),
+  input_id = "my_svg_capture"
+)
+
+observeEvent(input$my_svg_capture, {
+  bytes <- base64_decode(input$my_svg_capture)
+  writeBin(bytes, "chart.svg")
+})
+```
+
+## How it works
+
+1. `capture_plotly()` / `capture_element()` sends a custom Shiny message to the browser.
+2. The JavaScript handler runs the strategy: optional preprocess step (strip patches),
+   then `Plotly.toImage()` or `html2canvas`.
+3. The resulting base64 string is sent back via `Shiny.setInputValue()`.
+4. Your `observeEvent` fires and the string is available in `input[[id]]`.

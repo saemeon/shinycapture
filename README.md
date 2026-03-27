@@ -4,7 +4,7 @@
 
 # shinycapture
 
-Three-stage pluggable capture pipeline for Shiny applications. Captures Plotly charts at exact resolution via `Plotly.toImage()` and arbitrary HTML elements via `html2canvas`.
+Plotly charts in Shiny are rendered by JavaScript in the user's browser — the R server never holds the chart as pixels. shinycapture solves this by triggering the capture directly in the browser and sending the result back to R, with no server-side Chrome or headless browser required.
 
 ## Installation
 
@@ -20,7 +20,6 @@ library(shinycapture)
 library(plotly)
 
 ui <- fluidPage(
-  shinycapture_deps(),
   plotlyOutput("my_plot"),
   actionButton("capture_btn", "Export PNG")
 )
@@ -30,33 +29,59 @@ server <- function(input, output, session) {
     plot_ly(x = ~rnorm(100), type = "histogram")
   })
 
-  # Trigger capture — sends result to input[[".shinycapture.my_plot"]]
+  # Step 1: trigger capture in the browser
   observeEvent(input$capture_btn, {
-    capture_plotly("my_plot", session = session)
+    capture_plotly("my_plot",
+      strategy = plotly_strategy(width = 1200, height = 800)
+    )
   })
 
-  # React to result — input value is already decoded raw bytes
+  # Step 2: react when the result arrives (base64 data-URI string)
   observeEvent(input[[".shinycapture.my_plot"]], {
-    png_bytes <- input[[".shinycapture.my_plot"]]
-    writeBin(png_bytes, "export.png")
+    # Display directly in the UI
+    output$preview <- renderUI(
+      tags$img(src = input[[".shinycapture.my_plot"]])
+    )
+
+    # Or decode to raw bytes for saving / processing
+    bytes <- base64_decode(input[[".shinycapture.my_plot"]])
+    writeBin(bytes, "export.png")
   })
 }
 
 shinyApp(ui, server)
 ```
 
-## Pipeline stages
-
-1. **Preprocess** — modify the target element before capture (e.g. strip titles, resize)
-2. **Capture** — take the screenshot (`Plotly.toImage` or `html2canvas`)
-3. **Postprocess** — process the result server-side (e.g. corporate framing, format conversion)
-
 ## Capture strategies
 
 | Strategy | Target | Method |
 |----------|--------|--------|
-| `plotly_strategy` | Plotly charts | `Plotly.toImage()` — exact resolution |
-| `html2canvas_strategy` | Any HTML element | `html2canvas` library |
+| `plotly_strategy()` | Plotly charts | `Plotly.toImage()` — exact resolution, supports strip patches |
+| `html2canvas_strategy()` | Any HTML element | `html2canvas` — screenshots arbitrary DOM elements |
+
+### High-resolution export with strip patches
+
+```r
+capture_plotly("my_plot",
+  strategy = plotly_strategy(
+    strip_title  = TRUE,   # remove title before capture
+    strip_legend = TRUE,   # remove legend before capture
+    width  = 2400,
+    height = 1600
+  )
+)
+```
+
+Strip patches modify a hidden off-screen clone of the chart — the original is unaffected.
+
+## How it works
+
+1. **Trigger** — R sends a Shiny custom message to the browser
+2. **Preprocess** (optional) — JavaScript modifies the element (strip patches, resize)
+3. **Capture** — `Plotly.toImage()` or `html2canvas` takes the screenshot and returns a base64 string
+4. **Deliver** — `Shiny.setInputValue()` sends the base64 string to the R server as `input[[id]]`
+
+The result is a base64 data-URI string. Use it directly as an `<img>` `src` attribute, or call `base64_decode()` to get raw bytes.
 
 ## License
 

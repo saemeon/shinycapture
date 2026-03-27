@@ -4,11 +4,12 @@ Version: 0.1.0
 Authors@R:
     person("Simon", "Niederberger", email = "s.niederberger@hotmail.com",
            role = c("aut", "cre"))
-Description: Three-stage pluggable capture pipeline (preprocess, capture,
-    postprocess) for Shiny applications. Captures Plotly charts at exact
-    resolution via Plotly.toImage() and arbitrary HTML elements via
-    html2canvas. Returns raw bytes as reactive values for server-side
-    processing (e.g. corporate framing, annotation, format conversion).
+Description: Browser-side capture pipeline for Shiny applications. Triggers
+    capture directly in the user's browser — no server-side Chrome required.
+    Captures Plotly charts at exact resolution via Plotly.toImage() and
+    arbitrary HTML elements via html2canvas. The result is delivered as a
+    base64 string to a Shiny input, ready for display or server-side
+    processing (e.g. corporate framing, format conversion, download).
 License: MIT + file LICENSE
 URL: https://github.com/saemeon/shinycapture
 BugReports: https://github.com/saemeon/shinycapture/issues
@@ -16,13 +17,15 @@ Imports:
     shiny (>= 1.7.0),
     htmltools,
     jsonlite,
-    stats,
     utils
 Suggests:
+    knitr,
     plotly,
+    rmarkdown,
     shinytest2,
     testthat (>= 3.0.0)
+VignetteBuilder: knitr
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.3.0
+RoxygenNote: 7.3.3
 Config/testthat/edition: 3
