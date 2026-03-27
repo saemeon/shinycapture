@@ -13,8 +13,6 @@ src/*.so
 src/*.dll
 
 # Documentation
-man/*.Rd
-!man/figures/
 docs/
 
 # Namespace (if generated)
