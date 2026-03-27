@@ -16,6 +16,7 @@ jobs:
         with:
           extra-packages: any::lintr, any::spelling
           needs: lint
+          pak-version: devel
 
       - name: Spell check
         run: Rscript -e 'spelling::spell_check_package(error = TRUE)'
