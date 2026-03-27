@@ -15,10 +15,16 @@ jobs:
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
           extra-packages: any::lintr, any::spelling
-          pak-version: devel
+          pak-version: stable
 
       - name: Spell check
-        run: Rscript -e 'spelling::spell_check_package(error = TRUE)'
+        run: |
+          Rscript -e '
+            results <- spelling::spell_check_package()
+            if (nrow(results) > 0) {
+              print(results)
+              stop("Spell check failed")
+            }'
 
       - name: Lint
         run: Rscript -e 'lintr::lint_package()'
