@@ -10,6 +10,7 @@ jobs:
   check:
     name: R ${{ matrix.r }} on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.r == 'devel' }}
     strategy:
       fail-fast: false
       matrix:
@@ -29,6 +30,7 @@ jobs:
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
           extra-packages: any::rcmdcheck
+          needs: check
           pak-version: devel
 
       - uses: r-lib/actions/check-r-package@v2
