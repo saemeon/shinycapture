@@ -40,8 +40,10 @@ library(shinytest2)
       output$result_info <- shiny::renderText({
         val <- input[[".shinycapture.my_plot"]]
         if (is.null(val)) return("waiting")
-        paste0("bytes:", length(val),
-               " png:", identical(val[1:4], as.raw(c(0x89, 0x50, 0x4e, 0x47))))
+        # val is a base64 data-URI string
+        bytes <- base64_decode(val)
+        paste0("bytes:", length(bytes),
+               " png:", identical(bytes[1:4], as.raw(c(0x89, 0x50, 0x4e, 0x47))))
       })
     }
   )
