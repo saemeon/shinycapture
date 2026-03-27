@@ -16,7 +16,7 @@
 #' @param strip_annotations Remove all annotations before capture.
 #' @param strip_axis_titles Remove x/y axis titles before capture.
 #' @param strip_colorbar Hide colorbars on all traces before capture.
-#' @param strip_margin Zero all figure margins before capture, maximising
+#' @param strip_margin Zero all figure margins before capture, maximizing
 #'   the plot area.
 #' @param width Capture width in pixels. \code{NULL} (default) uses the
 #'   element's current rendered width.
