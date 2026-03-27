@@ -7,3 +7,5 @@
 ^examples$
 ^\.gitignore$
 ^LICENSE\.md$
+^cran-comments\.md$
+^CONTRIBUTING\.md$
