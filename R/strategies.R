@@ -1,26 +1,50 @@
 # Copyright (c) Simon Niederberger.
 # Distributed under the terms of the MIT License.
 
-#' Create a Plotly capture strategy with optional strip patches
+#' Create a Plotly capture strategy
 #'
-#' Generates a strategy that uses \code{Plotly.toImage()} for capture.
-#' Strip flags produce JS preprocess code that removes decorations from the
-#' figure before capture (title, legend, margins, etc.).
+#' Generates a \code{capture_strategy} object that uses \code{Plotly.toImage()}
+#' for browser-side capture. Pass it to \code{\link{capture_plotly}}.
 #'
-#' The strip-patch JS fragments are kept in sync with the Python version
-#' in \code{packages/dash-capture/src/dash_capture/strategies.py}.
+#' Strip flags inject JavaScript that modifies the figure \emph{before}
+#' capture — removing decorations that look good interactively but clutter
+#' a static export (titles, legends, margins). The original figure is
+#' unaffected; modifications happen in a hidden off-screen clone.
 #'
 #' @param strip_title Remove the figure title before capture.
 #' @param strip_legend Hide the legend before capture.
 #' @param strip_annotations Remove all annotations before capture.
 #' @param strip_axis_titles Remove x/y axis titles before capture.
 #' @param strip_colorbar Hide colorbars on all traces before capture.
-#' @param strip_margin Zero all figure margins before capture.
-#' @param width Capture width in pixels (NULL = use displayed size).
-#' @param height Capture height in pixels (NULL = use displayed size).
-#' @param format Output format: \code{"png"}, \code{"jpeg"}, \code{"webp"},
-#'   \code{"svg"}.
-#' @return A list with class \code{"capture_strategy"}.
+#' @param strip_margin Zero all figure margins before capture, maximising
+#'   the plot area.
+#' @param width Capture width in pixels. \code{NULL} (default) uses the
+#'   element's current rendered width.
+#' @param height Capture height in pixels. \code{NULL} uses rendered height.
+#'   For publication-quality output use e.g. \code{width = 2400, height = 1600}.
+#' @param format Output image format: \code{"png"} (default), \code{"jpeg"},
+#'   \code{"webp"}, or \code{"svg"}.
+#'
+#' @return A list of class \code{"capture_strategy"} with fields
+#'   \code{strategy}, \code{preprocess_js}, and \code{opts}.
+#'   Pass to \code{\link{capture_plotly}}.
+#'
+#' @seealso \code{\link{capture_plotly}}, \code{\link{html2canvas_strategy}}
+#'
+#' @examples
+#' # Default — no stripping, native resolution, PNG
+#' s <- plotly_strategy()
+#'
+#' # High-resolution export without title or legend
+#' s <- plotly_strategy(
+#'   strip_title  = TRUE,
+#'   strip_legend = TRUE,
+#'   width  = 2400,
+#'   height = 1600
+#' )
+#'
+#' # SVG output
+#' s <- plotly_strategy(format = "svg")
 #' @export
 plotly_strategy <- function(strip_title = FALSE,
                             strip_legend = FALSE,
@@ -78,28 +102,42 @@ plotly_strategy <- function(strip_title = FALSE,
   }
 
   opts <- list(format = format)
-  if (!is.null(width)) opts$width <- width
+  if (!is.null(width))  opts$width  <- width
   if (!is.null(height)) opts$height <- height
 
   structure(
-    list(
-      strategy = "plotly",
-      preprocess_js = preprocess_js,
-      opts = opts
-    ),
+    list(strategy = "plotly", preprocess_js = preprocess_js, opts = opts),
     class = "capture_strategy"
   )
 }
 
+
 #' Create an html2canvas capture strategy
 #'
-#' Captures arbitrary DOM elements using the html2canvas library.
-#' Requires html2canvas to be loaded in the page (e.g. via
-#' \code{tags$script(src = "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.0/html2canvas.min.js")}).
+#' Generates a \code{capture_strategy} object that uses the
+#' \href{https://html2canvas.hertzen.com/}{html2canvas} library to screenshot
+#' any DOM element. Pass it to \code{\link{capture_element}}.
 #'
-#' @param scale Resolution multiplier (default 2).
-#' @param format Output format: \code{"png"}, \code{"jpeg"}/\code{"jpg"}.
-#' @return A list with class \code{"capture_strategy"}.
+#' html2canvas is bundled with this package and loaded automatically when
+#' using \code{\link{capture_element}} with this strategy.
+#'
+#' @param scale Resolution multiplier. \code{2} (default) captures at double
+#'   the CSS pixel density, producing a sharper image on high-DPI screens.
+#'   Use \code{3} or higher for print-quality output.
+#' @param format Output format: \code{"png"} (default) or \code{"jpeg"}.
+#'
+#' @return A list of class \code{"capture_strategy"} with fields
+#'   \code{strategy}, \code{preprocess_js}, and \code{opts}.
+#'   Pass to \code{\link{capture_element}}.
+#'
+#' @seealso \code{\link{capture_element}}, \code{\link{plotly_strategy}}
+#'
+#' @examples
+#' # Default — 2× resolution, PNG
+#' s <- html2canvas_strategy()
+#'
+#' # High-resolution JPEG
+#' s <- html2canvas_strategy(scale = 3, format = "jpeg")
 #' @export
 html2canvas_strategy <- function(scale = 2, format = "png") {
   structure(
