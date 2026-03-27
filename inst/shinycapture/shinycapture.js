@@ -93,7 +93,7 @@ Shiny.addCustomMessageHandler('shinycapture-capture', async function(msg) {
 
   if (base64) {
     Shiny.setInputValue(
-      msg.input_id,
+      msg.input_id + ':shinycapture',
       base64,
       { priority: 'event' }
     );

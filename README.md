@@ -30,11 +30,15 @@ server <- function(input, output, session) {
     plot_ly(x = ~rnorm(100), type = "histogram")
   })
 
+  # Trigger capture — sends result to input[[".shinycapture.my_plot"]]
   observeEvent(input$capture_btn, {
-    capture_plotly("my_plot", session, callback = function(png_bytes) {
-      # Post-process the captured image (e.g. add corporate frame)
-      writeBin(png_bytes, "export.png")
-    })
+    capture_plotly("my_plot", session = session)
+  })
+
+  # React to result — input value is already decoded raw bytes
+  observeEvent(input[[".shinycapture.my_plot"]], {
+    png_bytes <- input[[".shinycapture.my_plot"]]
+    writeBin(png_bytes, "export.png")
   })
 }
 

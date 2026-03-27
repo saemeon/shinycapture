@@ -1,0 +1,8 @@
+^\.github$
+^\.git$
+^\.DS_Store$
+^.*\.Rproj$
+^\.Rproj\.user$
+^README\.md$
+^examples$
+^\.gitignore$

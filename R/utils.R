@@ -1,16 +1,10 @@
 # Copyright (c) Simon Niederberger.
 # Distributed under the terms of the MIT License.
 
-#' Decode a base64 data-URI or raw base64 string to raw bytes
-#'
-#' Strips the \code{data:image/...;base64,} prefix if present, then
-#' decodes the remaining base64 payload to raw bytes.
-#'
-#' @param b64_string A base64-encoded string, optionally with data-URI prefix.
-#' @return A \code{raw} vector containing the decoded bytes.
-#' @export
-base64_decode <- function(b64_string) {
-  # Strip data-URI prefix if present
+# Decode a base64 data-URI or raw base64 string to raw bytes.
+# Strips the data:image/...;base64, prefix if present.
+# Called by the registered Shiny input handler — not exported.
+.base64_decode <- function(b64_string) {
   if (grepl("^data:", b64_string)) {
     b64_string <- sub("^data:[^;]+;base64,", "", b64_string)
   }

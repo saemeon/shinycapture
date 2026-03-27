@@ -15,9 +15,12 @@ BugReports: https://github.com/saemeon/shinycapture/issues
 Imports:
     shiny (>= 1.7.0),
     htmltools,
-    jsonlite
+    jsonlite,
+    stats,
+    utils
 Suggests:
     plotly,
+    shinytest2,
     testthat (>= 3.0.0)
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
